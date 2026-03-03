@@ -2,476 +2,121 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>网址访问器 - 完全修复版</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3B82F6',
-                        secondary: '#10B981',
-                    },
-                }
-            }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多账号网页监控台</title>
+    <style>
+        /* 核心修复 1：加入 box-sizing，防止边距导致整体页面被撑破溢出 */
+        * { box-sizing: border-box; }
+        
+        body { font-family: sans-serif; padding: 15px; margin: 0; background-color: #f4f4f9; }
+        .controls { margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button { padding: 8px 15px; margin-top: 10px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        
+        .grid-container {
+            display: grid;
+            /* 核心修复 2：将最小宽度从 400px 缩小到 320px，这样在小屏幕/半屏下也能并排显示 */
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 15px;
         }
-    </script>
-    
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .touch-friendly {
-                touch-action: manipulation;
-                -webkit-tap-highlight-color: rgba(59, 130, 246, 0.2);
-            }
-            .loading {
-                animation: spin 1.5s linear infinite;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
+        
+        .frame-box {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .frame-title {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .frame-title a { color: #007bff; text-decoration: none; font-size: 13px; font-weight: normal; }
+        
+        /* 核心修复 3：大幅增加高度。如果学校网页内容多，500px 能显示更全 */
+        iframe { 
+            width: 100%; 
+            height: 500px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            background-color: #fafafa;
+        }
+        
+        /* 响应式微调：如果是手机屏幕竖屏，让 iframe 再高一点，方便上下滑动 */
+        @media (max-width: 600px) {
+            iframe { height: 600px; }
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans text-gray-800">
-    <div class="container mx-auto px-4 py-6 max-w-4xl">
-        <header class="text-center mb-8">
-            <h1 class="text-[clamp(1.5rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">
-                <i class="fa fa-link text-primary mr-2"></i>网址访问器
-            </h1>
-            <p class="text-gray-600">导入TXT文件，批量管理和访问网址</p>
-        </header>
-        
-        <main>
-            <!-- 文件上传区域 -->
-            <section class="bg-white rounded-xl p-6 mb-6 shadow-md">
-                <h2 class="text-lg font-semibold mb-4 flex items-center">
-                    <i class="fa fa-upload text-primary mr-2"></i>导入网址文件
-                </h2>
-                
-                <!-- 主要上传按钮 - 独立于dropArea，避免事件冲突 -->
-                <button id="primaryUploadBtn" class="w-full bg-primary text-white py-3 px-4 rounded-lg font-medium hover:bg-primary/90 transition-colors mb-4 touch-friendly flex items-center justify-center">
-                    <i class="fa fa-file-text-o mr-2"></i>选择包含网址的TXT文件
-                </button>
-                
-                <!-- 拖放区域 - 仅用于拖放，不处理点击 -->
-                <div id="dropArea" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary hover:bg-blue-50 transition-all duration-300 mb-4">
-                    <p class="text-gray-600">或者将TXT文件拖放到此处</p>
-                    <p class="text-xs text-gray-500 mt-2">文件中每行包含一个网址（例如：https://example.com）</p>
-                </div>
-                
-                <!-- 加载指示器 -->
-                <div id="loadingIndicator" class="hidden text-center py-3">
-                    <i class="fa fa-circle-o-notch loading text-primary text-xl"></i>
-                    <p class="text-sm text-gray-600 mt-2">正在处理文件...</p>
-                </div>
-                
-                <!-- 文件信息显示 -->
-                <div id="fileInfo" class="hidden bg-green-50 border border-green-200 rounded-lg p-3">
-                    <div class="flex items-center">
-                        <i class="fa fa-check-circle text-green-500 mr-2"></i>
-                        <div class="flex-1">
-                            <p class="font-medium text-green-800" id="fileName"></p>
-                            <p class="text-sm text-green-700" id="urlCount"></p>
-                        </div>
-                        <button id="clearFile" class="text-gray-500 hover:text-red-500 p-2 touch-friendly">
-                            <i class="fa fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- 隐藏的文件输入 -->
-                <input type="file" id="fileInput" accept=".txt" class="hidden">
-            </section>
-            
-            <!-- 网址列表区域 -->
-            <section class="mb-6">
-                <div class="flex flex-wrap justify-between items-center mb-4">
-                    <h2 class="text-lg font-semibold flex items-center">
-                        <i class="fa fa-list text-primary mr-2"></i>网址列表
-                    </h2>
-                    <div class="flex gap-2">
-                        <button id="openAll" class="bg-secondary text-white px-4 py-2 rounded-lg font-medium hover:bg-secondary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-friendly" disabled>
-                            <i class="fa fa-external-link mr-1"></i>全部打开
-                        </button>
-                        <button id="copyAll" class="bg-gray-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-friendly" disabled>
-                            <i class="fa fa-copy mr-1"></i>复制全部
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                    <div id="emptyState" class="py-12 text-center">
-                        <i class="fa fa-file-text-o text-5xl text-gray-300 mb-3"></i>
-                        <p class="text-gray-500">尚未导入任何文件</p>
-                        <p class="text-gray-400 text-sm mt-1">请上传包含网址的TXT文件</p>
-                    </div>
-                    
-                    <div id="urlsList" class="hidden max-h-[400px] overflow-y-auto">
-                        <!-- 网址项将动态添加 -->
-                    </div>
-                </div>
-            </section>
-        </main>
-        
-        <footer class="text-center text-gray-500 text-sm mt-8">
-            <p>网址访问器 &copy; 2023 | 完全修复版</p>
-        </footer>
-    </div>
-    
-    <!-- 通知提示 -->
-    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 translate-y-20 opacity-0 px-5 py-3 rounded-lg shadow-lg transition-all duration-300 flex items-center max-w-[80%]">
-        <i id="toastIcon" class="mr-2"></i>
-        <span id="toastMessage"></span>
+<body>
+
+    <div class="controls">
+        <h2 style="margin-top:0;">📂 上传 result_urls.txt 预览</h2>
+        <input type="file" id="fileInput" accept=".txt">
+        <br>
+        <button onclick="openAllInNewTabs()">备用方案：在所有新标签页中打开</button>
     </div>
 
+    <div id="gridContainer" class="grid-container">
+        </div>
+
     <script>
-        // DOM元素
-        const fileInput = document.getElementById('fileInput');
-        const primaryUploadBtn = document.getElementById('primaryUploadBtn');
-        const dropArea = document.getElementById('dropArea');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const urlCount = document.getElementById('urlCount');
-        const clearFile = document.getElementById('clearFile');
-        const emptyState = document.getElementById('emptyState');
-        const urlsList = document.getElementById('urlsList');
-        const openAllBtn = document.getElementById('openAll');
-        const copyAllBtn = document.getElementById('copyAll');
-        const toast = document.getElementById('toast');
-        const toastIcon = document.getElementById('toastIcon');
-        const toastMessage = document.getElementById('toastMessage');
-        
-        // 状态变量
-        let urlList = [];
-        let isProcessing = false;
-        
-        // 初始化事件监听 - 采用更简单直接的方式
-        function initEvents() {
-            // 主要上传按钮 - 单独处理点击事件
-            primaryUploadBtn.addEventListener('click', () => {
-                if (!isProcessing) {
-                    // 重置文件输入，确保能选择同一文件
-                    fileInput.value = '';
-                    // 触发文件选择对话框
-                    fileInput.click();
-                }
-            });
-            
-            primaryUploadBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (!isProcessing) {
-                    fileInput.value = '';
-                    fileInput.click();
-                }
-            });
-            
-            // 文件选择处理 - 只在文件真正改变时处理
-            fileInput.addEventListener('change', (e) => {
-                if (!isProcessing && e.target.files && e.target.files.length > 0) {
-                    handleFile(e.target.files[0]);
-                }
-            });
-            
-            // 拖放事件处理
-            dropArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropArea.classList.add('border-primary', 'bg-blue-50');
-            });
-            
-            dropArea.addEventListener('dragleave', () => {
-                dropArea.classList.remove('border-primary', 'bg-blue-50');
-            });
-            
-            dropArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropArea.classList.remove('border-primary', 'bg-blue-50');
-                
-                if (!isProcessing && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    handleFile(e.dataTransfer.files[0]);
-                }
-            });
-            
-            // 清除文件
-            clearFile.addEventListener('click', resetFile);
-            clearFile.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                resetFile();
-            });
-            
-            // 批量操作
-            openAllBtn.addEventListener('click', openAllUrls);
-            openAllBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                openAllUrls();
-            });
-            
-            copyAllBtn.addEventListener('click', copyAllUrls);
-            copyAllBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                copyAllUrls();
-            });
-        }
-        
-        // 处理文件 - 核心函数，简化逻辑
-        function handleFile(file) {
-            // 验证文件类型
-            if (!file.name.endsWith('.txt')) {
-                showToast('请选择TXT格式的文件', 'error');
+        let allUrls = [];
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const lines = event.target.result.split('\n');
+                const grid = document.getElementById('gridContainer');
+                grid.innerHTML = ''; 
+                allUrls = [];
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (line) {
+                        const parts = line.split(',');
+                        if (parts.length >= 2) {
+                            const username = parts[0].trim();
+                            const url = parts[1].trim();
+                            allUrls.push(url);
+
+                            const box = document.createElement('div');
+                            box.className = 'frame-box';
+                            box.innerHTML = `
+                                <h3 class="frame-title">
+                                    <span>👤 账号: ${username}</span>
+                                    <a href="${url}" target="_blank">放大打开 ↗</a>
+                                </h3>
+                                <iframe src="${url}" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
+                            `;
+                            grid.appendChild(box);
+                        }
+                    }
+                });
+            };
+            reader.readAsText(file);
+        });
+
+        function openAllInNewTabs() {
+            if (allUrls.length === 0) {
+                alert("请先上传 txt 文件！");
                 return;
             }
-            
-            // 标记为处理中
-            isProcessing = true;
-            loadingIndicator.classList.remove('hidden');
-            fileInfo.classList.add('hidden');
-            
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                // 处理完成，重置状态
-                isProcessing = false;
-                loadingIndicator.classList.add('hidden');
-                
-                // 解析内容
-                const content = e.target.result;
-                urlList = content.split(/\r?\n/)  // 处理不同换行符
-                    .map(url => url.trim())
-                    .filter(url => url.length > 0)
-                    .map(url => {
-                        // 补全协议
-                        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                            return 'http://' + url;
-                        }
-                        return url;
-                    });
-                
-                if (urlList.length === 0) {
-                    showToast('文件中未找到有效的网址', 'warning');
-                    return;
-                }
-                
-                // 更新UI
-                fileName.textContent = `文件: ${file.name}`;
-                urlCount.textContent = `共 ${urlList.length} 个网址`;
-                fileInfo.classList.remove('hidden');
-                renderUrlList();
-                toggleActionButtons(true);
-                
-                showToast(`成功导入 ${urlList.length} 个网址`, 'success');
-            };
-            
-            reader.onerror = () => {
-                isProcessing = false;
-                loadingIndicator.classList.add('hidden');
-                showToast('文件读取失败，请重试', 'error');
-            };
-            
-            // 读取文件
-            reader.readAsText(file);
-        }
-        
-        // 渲染网址列表
-        function renderUrlList() {
-            urlsList.innerHTML = '';
-            urlsList.classList.remove('hidden');
-            emptyState.classList.add('hidden');
-            
-            urlList.forEach((url, index) => {
-                // 提取域名显示
-                let displayName = url;
-                try {
-                    const urlObj = new URL(url);
-                    displayName = urlObj.hostname;
-                } catch (e) {
-                    displayName = url;
-                }
-                
-                const item = document.createElement('div');
-                item.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors';
-                
-                item.innerHTML = `
-                    <div class="flex items-center mb-2 sm:mb-0">
-                        <span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded mr-3">${index + 1}</span>
-                        <div>
-                            <p class="font-medium text-gray-800">${displayName}</p>
-                            <p class="text-xs text-gray-500 truncate max-w-[200px] sm:max-w-[300px]">${url}</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-2 w-full sm:w-auto justify-end">
-                        <button class="copy-url flex-1 sm:flex-none bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-sm transition-colors touch-friendly" data-url="${url}">
-                            <i class="fa fa-copy mr-1"></i>复制
-                        </button>
-                        <button class="open-url flex-1 sm:flex-none bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2 rounded text-sm transition-colors touch-friendly" data-url="${url}">
-                            <i class="fa fa-external-link mr-1"></i>打开
-                        </button>
-                    </div>
-                `;
-                
-                urlsList.appendChild(item);
-            });
-            
-            // 为按钮添加事件
-            document.querySelectorAll('.open-url').forEach(btn => {
-                btn.addEventListener('click', () => openUrl(btn.dataset.url));
-                btn.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    openUrl(btn.dataset.url);
+            if (confirm(`即将同时打开 ${allUrls.length} 个新标签页，是否继续？`)) {
+                allUrls.forEach(url => {
+                    window.open(url, '_blank');
                 });
-            });
-            
-            document.querySelectorAll('.copy-url').forEach(btn => {
-                btn.addEventListener('click', () => copyUrl(btn.dataset.url));
-                btn.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    copyUrl(btn.dataset.url);
-                });
-            });
-        }
-        
-        // 重置文件状态
-        function resetFile() {
-            fileInput.value = '';
-            fileInfo.classList.add('hidden');
-            urlsList.classList.add('hidden');
-            emptyState.classList.remove('hidden');
-            urlList = [];
-            toggleActionButtons(false);
-            showToast('已清除文件', 'info');
-        }
-        
-        // 切换操作按钮状态
-        function toggleActionButtons(enabled) {
-            openAllBtn.disabled = !enabled;
-            copyAllBtn.disabled = !enabled;
-        }
-        
-        // 打开单个网址
-        function openUrl(url) {
-            try {
-                window.open(url, '_blank');
-                showToast('正在打开网址', 'info');
-            } catch (e) {
-                copyUrl(url);
-                showToast('已复制网址，请手动打开', 'error');
             }
         }
-        
-        // 打开所有网址
-        function openAllUrls() {
-            if (urlList.length === 0) return;
-            
-            showToast(`将打开 ${urlList.length} 个网址`, 'info');
-            
-            // 分批打开，避免被浏览器拦截
-            urlList.forEach((url, i) => {
-                setTimeout(() => {
-                    try {
-                        window.open(url, '_blank');
-                    } catch (e) {
-                        console.log(`无法打开: ${url}`);
-                    }
-                }, i * 1000);
-            });
-        }
-        
-        // 复制单个网址
-        function copyUrl(url) {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(url)
-                    .then(() => showToast('网址已复制', 'success'))
-                    .catch(() => fallbackCopy(url));
-            } else {
-                fallbackCopy(url);
-            }
-        }
-        
-        // 复制所有网址
-        function copyAllUrls() {
-            const text = urlList.join('\n');
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text)
-                    .then(() => showToast(`已复制全部 ${urlList.length} 个网址`, 'success'))
-                    .catch(() => fallbackCopy(text));
-            } else {
-                fallbackCopy(text);
-            }
-        }
-        
-        // 复制备选方案
-        function fallbackCopy(text) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            document.body.appendChild(textarea);
-            textarea.select();
-            
-            try {
-                document.execCommand('copy');
-                showToast('已复制到剪贴板', 'success');
-            } catch (e) {
-                showToast('复制失败，请手动复制', 'error');
-            } finally {
-                document.body.removeChild(textarea);
-            }
-        }
-        
-        // 显示提示
-        function showToast(message, type = 'info') {
-            let icon, bgColor, textColor;
-            
-            switch (type) {
-                case 'success':
-                    icon = 'fa-check-circle';
-                    bgColor = 'bg-green-500';
-                    textColor = 'text-white';
-                    break;
-                case 'error':
-                    icon = 'fa-exclamation-circle';
-                    bgColor = 'bg-red-500';
-                    textColor = 'text-white';
-                    break;
-                case 'warning':
-                    icon = 'fa-exclamation-triangle';
-                    bgColor = 'bg-yellow-500';
-                    textColor = 'text-white';
-                    break;
-                default:
-                    icon = 'fa-info-circle';
-                    bgColor = 'bg-blue-500';
-                    textColor = 'text-white';
-            }
-            
-            toastIcon.className = `fa ${icon} ${textColor}`;
-            toastMessage.textContent = message;
-            toast.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 translate-y-0 opacity-100 px-5 py-3 rounded-lg shadow-lg transition-all duration-300 flex items-center max-w-[80%] ${bgColor} ${textColor}`;
-            
-            clearTimeout(toast.timer);
-            toast.timer = setTimeout(() => {
-                toast.className = 'fixed bottom-5 left-1/2 transform -translate-x-1/2 translate-y-20 opacity-0 px-5 py-3 rounded-lg shadow-lg transition-all duration-300 flex items-center max-w-[80%]';
-            }, 3000);
-        }
-        
-        // 初始化应用
-        function init() {
-            initEvents();
-            
-            // 设备检测提示
-            const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-            if (isMobile) {
-                setTimeout(() => {
-                    showToast('已优化移动设备体验', 'info');
-                }, 1000);
-            }
-        }
-        
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
