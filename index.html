@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多账号网页监控台</title>
+    <style>
+        /* 核心修复 1：加入 box-sizing，防止边距导致整体页面被撑破溢出 */
+        * { box-sizing: border-box; }
+        
+        body { font-family: sans-serif; padding: 15px; margin: 0; background-color: #f4f4f9; }
+        .controls { margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button { padding: 8px 15px; margin-top: 10px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        
+        .grid-container {
+            display: grid;
+            /* 核心修复 2：将最小宽度从 400px 缩小到 320px，这样在小屏幕/半屏下也能并排显示 */
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 15px;
+        }
+        
+        .frame-box {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .frame-title {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .frame-title a { color: #007bff; text-decoration: none; font-size: 13px; font-weight: normal; }
+        
+        /* 核心修复 3：大幅增加高度。如果学校网页内容多，500px 能显示更全 */
+        iframe { 
+            width: 100%; 
+            height: 500px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            background-color: #fafafa;
+        }
+        
+        /* 响应式微调：如果是手机屏幕竖屏，让 iframe 再高一点，方便上下滑动 */
+        @media (max-width: 600px) {
+            iframe { height: 600px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h2 style="margin-top:0;">📂 上传 result_urls.txt 预览</h2>
+        <input type="file" id="fileInput" accept=".txt">
+        <br>
+        <button onclick="openAllInNewTabs()">备用方案：在所有新标签页中打开</button>
+    </div>
+
+    <div id="gridContainer" class="grid-container">
+        </div>
+
+    <script>
+        let allUrls = [];
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const lines = event.target.result.split('\n');
+                const grid = document.getElementById('gridContainer');
+                grid.innerHTML = ''; 
+                allUrls = [];
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (line) {
+                        const parts = line.split(',');
+                        if (parts.length >= 2) {
+                            const username = parts[0].trim();
+                            const url = parts[1].trim();
+                            allUrls.push(url);
+
+                            const box = document.createElement('div');
+                            box.className = 'frame-box';
+                            box.innerHTML = `
+                                <h3 class="frame-title">
+                                    <span>👤 账号: ${username}</span>
+                                    <a href="${url}" target="_blank">放大打开 ↗</a>
+                                </h3>
+                                <iframe src="${url}" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
+                            `;
+                            grid.appendChild(box);
+                        }
+                    }
+                });
+            };
+            reader.readAsText(file);
+        });
+
+        function openAllInNewTabs() {
+            if (allUrls.length === 0) {
+                alert("请先上传 txt 文件！");
+                return;
+            }
+            if (confirm(`即将同时打开 ${allUrls.length} 个新标签页，是否继续？`)) {
+                allUrls.forEach(url => {
+                    window.open(url, '_blank');
+                });
+            }
+        }
+    </script>
+</body>
+</html>
